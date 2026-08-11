@@ -1,0 +1,10 @@
+tcpdump
+netcat-openbsd
+iperf3
+iproute2
+iputils-ping
+procps
+tshark
+iptables
+nftables
+conntrack 

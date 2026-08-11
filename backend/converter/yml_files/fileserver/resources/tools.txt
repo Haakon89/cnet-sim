@@ -1,0 +1,7 @@
+iproute2
+iputils-ping
+net-tools
+openssh-server
+tcpdump
+curl
+nano

@@ -1,0 +1,17 @@
+# Node
+node_modules/
+npm-debug.log*
+dist/
+
+# Environment files
+.env
+.env.local
+
+# Generated/capture output
+backend/results/
+*.pcap
+*.pcapng
+
+# OS/editor
+.DS_Store
+.vscode/
