@@ -1,0 +1,10 @@
+.app-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.canvas-area {
+  flex: 1;
+  height: 100%;
+}

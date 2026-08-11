@@ -1,0 +1,73 @@
+.animation-page {
+  display: flex;
+  height: 100vh;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+.animation-canvas {
+  position: relative;
+}
+
+.packet-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.packet-svg {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.packet-dot {
+  pointer-events: auto;
+  fill: #22c55e;
+  stroke: white;
+  stroke-width: 2px;
+}
+
+.packet-icmp {
+  fill: #22c55e;
+}
+
+.packet-tcp {
+  fill: #3b82f6;
+}
+
+.packet-http {
+  fill: #f97316;
+}
+
+.packet-ddos {
+  fill: #ef4444;
+}
+
+.packet-details {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid #374151;
+  border-radius: 0.75rem;
+  background: #1f2937;
+}
+
+/* =========================
+   ANIMATION SIDEBAR
+   ========================= */
+
+.animation-sidebar {
+  width: 300px;
+  padding: 1rem;
+  background: #111827;
+  border-right: 1px solid #374151;
+  color: #f9fafb;
+  overflow-y: auto;
+}
+
+.animation-sidebar h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+}
+

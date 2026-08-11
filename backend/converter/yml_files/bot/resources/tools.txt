@@ -1,0 +1,9 @@
+tcpdump
+iperf3
+iproute2
+iputils-ping
+netcat-openbsd
+procps
+traceroute
+curl
+nano

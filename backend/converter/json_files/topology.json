@@ -1,0 +1,88 @@
+{
+  "nextIds": {
+    "nodeId": 4,
+    "networkId": 3
+  },
+  "nodes": [
+    {
+      "id": "pc-1",
+      "role": "pc",
+      "networks": [
+        "net1"
+      ],
+      "ipAddresses": {
+        "net1": "10.1.0.10"
+      },
+      "position": {
+        "x": 160.56614420888377,
+        "y": 130.8257258354289
+      }
+    },
+    {
+      "id": "pc-2",
+      "role": "pc",
+      "networks": [
+        "net2"
+      ],
+      "ipAddresses": {
+        "net2": "10.2.0.10"
+      },
+      "position": {
+        "x": 309.53474100125334,
+        "y": 138.02843466538832
+      }
+    },
+    {
+      "id": "router-3",
+      "role": "router",
+      "networks": [
+        "net1",
+        "net2"
+      ],
+      "ipAddresses": {
+        "net1": "10.1.0.2",
+        "net2": "10.2.0.2"
+      },
+      "position": {
+        "x": 223.4578377466808,
+        "y": 261.4879543080642
+      }
+    }
+  ],
+  "botNets": [],
+  "networks": [
+    {
+      "id": "net1",
+      "subnet": "10.1.0.0/24",
+      "nodes": [
+        "pc-1",
+        "router-3"
+      ],
+      "color": "#22c55e"
+    },
+    {
+      "id": "net2",
+      "subnet": "10.2.0.0/24",
+      "nodes": [
+        "pc-2",
+        "router-3"
+      ],
+      "color": "#3b82f6"
+    }
+  ],
+  "links": [
+    {
+      "source": "pc-1",
+      "target": "router-3",
+      "networkId": "net1",
+      "distance": 10
+    },
+    {
+      "source": "pc-2",
+      "target": "router-3",
+      "networkId": "net2",
+      "distance": 10
+    }
+  ],
+  "trafficFlows": []
+}
