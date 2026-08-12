@@ -16,7 +16,7 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "node-pty": "^1.1.0",
-    "ws": "^8.21.0"
+    "ws": "^8.21.3"
   },
   "allowScripts": {
     "node-pty@1.1.0": true
