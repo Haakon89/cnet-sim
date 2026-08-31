@@ -40,8 +40,8 @@ jobs:
       - name: Audit dependencies
         run: npm audit --audit-level=high
 
-      #- name: Run tests
-      #  run: npm test -- --run
+      - name: Run tests
+        run: npm test
 
       - name: Build
         run: npm run build
@@ -75,8 +75,8 @@ jobs:
       - name: Audit dependencies
         run: npm audit --audit-level=high
 
-      #- name: Run tests
-      #  run: npm test
+      - name: Run tests
+        run: npm test
 
 
   converter:
@@ -103,8 +103,8 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      #- name: Test
-      #  run: go test ./...
+      - name: Test
+        run: go test ./...
 
 
   runner:
@@ -131,5 +131,5 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      #- name: Test
-      #  run: go test ./...
+      - name: Test
+        run: go test ./...

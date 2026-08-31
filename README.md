@@ -1,67 +1,208 @@
-##Requirements
-Docker
-Node
+# CNet-Sim
 
-##Known issues
-Docker starts of needing sudo to run, to be able to run the docker environments in the app, your current user has to be in the docker group so that you can run the commands without sudo rights.
+CNet-Sim is a container-based network simulation tool designed for creating, running, and analyzing network environments.
 
-The application can be run on windows subsystem linux, but it requires linux based node for installs and many of the bash scripts have the linux line endings so will not run without changing to windows line endings.
+Users can construct network topologies through a web interface, configure traffic between devices, and run the resulting environment using Docker containers. Network traffic can then be captured and analyzed to examine communication between devices and networks.
 
-##Startup
-To run the web application you need to set up the server and then the frontend.
+## Features
 
-In netsim-backend run,
+* Visual network topology creation
+* Container-based network environments
+* Multiple device types, including PCs, routers, and servers
+* Configurable traffic and attacks between nodes
+* Network traffic capture
+* Interactive and timed simulation modes
+* Reusable network templates
+* Configurable distance and latency between network components
+
+## Requirements
+
+The following software is required to run CNet-Sim:
+
+* Docker
+* Node.js and npm
+* Go
+
+Docker must be configured so that it can be run by the current user without `sudo`. See [Known Issues](#known-issues) for more information.
+
+## Installation and Startup
+
+Clone the repository and navigate to the project directory.
+
+### Backend
+
+Navigate to the backend directory:
+
+```bash
+cd backend
+```
+
+Install the required Node.js dependencies:
+
+```bash
 npm install
+```
+
+Start the backend server:
+
+```bash
 node server.js
+```
 
-In netsim-frontend run,
+### Frontend
+
+In a separate terminal, navigate to the frontend directory:
+
+```bash
+cd frontend
+```
+
+Install the required dependencies:
+
+```bash
 npm install
+```
+
+Start the development server:
+
+```bash
 npm run dev
+```
 
-You should now have the web app running on localhost port 5173
+The web application should now be available at:
 
-##Controlls
-Sidebar:
-Most actions you can take is done using the sidebar on the left side of the screen. It is sepperated into sections.
+`http://localhost:5173`
 
-Runtime settings:
-Here you can choose if you want to run the simulation in interactive mode or in timed mode.
+## Controls
 
-Templates:
-Here you can choose and load saved network templates, choose one from the dropdown menu and then click load template to show the currently selected template.
+Most actions are performed using the sidebar on the left side of the application. The sidebar is divided into several sections.
 
-Nodes:
-Here you have a dropdown menu of the different nodes(devices) that are available. Choose one from the dropdown then click Add node to add that device to the canvas. Once you have a node on the canvas you can select it by right clicking on it or using shift+mouse drag to create a selection box. While a node is selected you can click the Create network from selection button to add the selected nodes to a network.
+### Runtime Settings
 
-Environment:
-Here you can save your current environment as a template for later use(refresh the page to add it to the loadable templates list). You can also choose to run the current environment by clicking the Run Network Environment button, this will start up the simulation and either take you to the interactive or run page.
+The runtime settings allow you to choose how the network simulation should run.
 
-Help:
-Here you can find some helpfull notes on the controlls
+Two modes are available:
 
-Selected Node:
-This panel will be available if a node on the canvas is selected. Here you can look at information on the selected node as well as set up traffic/attacks between the nodes.
-to set up traffic/attack you first choose the traffic/attack type, then you choose which source ip to use(useually just one, but a device could have more than one network frame). After that you choose the destination IP, not all node types can take all sorts of traffic/attack types so the list shoul only list the correct targets.
-Once that is done you set the duration, which is how long the node should attempt to send the traffic/attack.
-When all options have been selected click Add traffic/attack to add the selected traffic/attack to the node.
+* **Interactive Mode** — Runs the environment interactively.
+* **Timed Mode** — Runs the environment for a specified period.
 
-Selected Edge:
-Similar to selected node, this shows information on a selected edge and lets you set a distance between nodes. This will impact latency on the edge, but not that it currently only works from routers and only one distance per network it is connected to will be used.
+### Templates
 
-Networks:
-Here you will have a list of the networks that are currently in use. they all have three buttons, add to network, which adds the currently selected nodes to the network, remove from network, which removes the currently selected nodes from the network and remove network which deletes the network and all edges related to it.
+The Templates section allows saved network environments to be loaded.
 
-Node Types:
-PC - Standard device running ubuntu.
+Select a template from the dropdown menu and click **Load Template** to display the selected topology on the canvas.
 
-Webserver - sets up an http server running a simple html page
+### Nodes
 
-Router - Device used to connect devices together and set up traffic routes between networks. Is also sed to capture traffic that passes through it.
+The Nodes section contains a dropdown menu with the available device types.
 
-Fileserver - an sftp server containing a txt, png and pdf document
+Select a device type and click **Add Node** to add the device to the canvas.
 
-BotNet - work in progress, does nothing atm.
+Nodes can be selected by right-clicking them or by holding `Shift` and dragging with the mouse to create a selection box.
 
-Bot - ubuntu device set up to running attacks agains other devices
+After selecting multiple nodes, click **Create Network from Selection** to create a network containing the selected nodes.
 
-BotRouter - Router that sends packets out, but refuses any traffic from outside.
+### Environment
+
+The Environment section provides controls for saving and running the current network environment.
+
+The current environment can be saved as a template for later use. After saving a template, refresh the page to make it available in the Templates dropdown menu.
+
+Click **Run Network Environment** to start the current network simulation. Depending on the selected runtime mode, you will be taken to either the interactive environment or the timed run page.
+
+### Help
+
+The Help section contains additional information about the application's controls.
+
+### Selected Node
+
+The Selected Node panel becomes available when a node on the canvas is selected.
+
+This panel displays information about the selected device and allows traffic or attacks to be configured between nodes.
+
+To configure traffic or an attack:
+
+1. Select the traffic or attack type.
+2. Select the source IP address. A device will usually have one source IP address, but devices connected to multiple networks may have several.
+3. Select the destination IP address. Only compatible destinations for the selected traffic or attack type are displayed.
+4. Set the duration for which the node should generate the traffic or attack.
+5. Click **Add Traffic/Attack** to add the configuration to the node.
+
+### Selected Edge
+
+The Selected Edge panel displays information about the currently selected connection between nodes.
+
+A distance can be assigned to the connection, which affects the latency applied to network traffic.
+
+Currently, distance-based latency is primarily applied to router connections, and only one configured distance per connected network is used.
+
+### Networks
+
+The Networks section displays all networks currently defined in the environment.
+
+Each network provides three actions:
+
+* **Add to Network** — Adds the currently selected nodes to the network.
+* **Remove from Network** — Removes the currently selected nodes from the network.
+* **Remove Network** — Deletes the network and its associated edges.
+
+## Node Types
+
+| Node            | Description                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| **PC**          | Standard Ubuntu-based end device.                                                                   |
+| **Web Server**  | Runs an HTTP server serving a simple HTML page.                                                     |
+| **Router**      | Connects networks, configures routes between them, and captures traffic passing through the device. |
+| **File Server** | Runs an SFTP server containing example TXT, PNG, and PDF files.                                     |
+| **BotNet**      | Work in progress and currently has no functionality.                                                |
+| **Bot**         | Ubuntu-based device configured to generate attacks against other devices.                           |
+| **BotRouter**   | Router configured to send packets while rejecting incoming traffic from external networks.          |
+
+## Contributing
+
+Changes to the repository must be submitted through a pull request from a non-main branch.
+
+Before creating a pull request, make sure that all linting checks and automated tests pass.
+
+From the root `cnet-sim` directory, run:
+
+```bash
+npm run lint
+npm test
+```
+
+Pull requests must pass all linting and automated tests before they can be merged.
+
+Changes submitted through pull requests will be reviewed before being merged into the main branch.
+
+## Known Issues
+
+### Docker Permissions
+
+Docker may initially require `sudo` to run commands on Linux.
+
+CNet-Sim needs to execute Docker commands without `sudo`, so the current user must have permission to access Docker. This can be achieved by adding the user to the Docker group.
+
+After configuring Docker permissions, verify that Docker can be run without `sudo`:
+
+```bash
+docker ps
+```
+
+### Windows Subsystem for Linux
+
+CNet-Sim can run using Windows Subsystem for Linux (WSL), but Node.js dependencies should be installed using the Linux/WSL Node.js environment.
+
+The project also contains Bash scripts that require Unix (`LF`) line endings. Windows (`CRLF`) line endings may cause these scripts to fail with errors such as:
+
+```text
+/usr/bin/env: 'bash\r': No such file or directory
+```
+
+If this occurs, convert the affected scripts to Unix line endings before running the environment.
+
+## Feedback
+
+If you are using CNet-Sim, please consider providing feedback about your experience. Feedback is useful for identifying usability issues and areas where the application can be improved.
+
+[Open the CNet-Sim feedback form](https://docs.google.com/forms/d/e/1FAIpQLSfiL8SyxKF5C9__YQpylQoml6bVT4GC0Q24rewaBwH_zMRxiQ/viewform?usp=publish-editor)

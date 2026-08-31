@@ -7,33 +7,52 @@ import (
 	"strings"
 )
 
-func ConvertTopologyToCompose(topo Topology) string {
-	result := ConvertTopology(topo)
+func ConvertTopologyToCompose(topo Topology) (string, error) {
+	result, err := ConvertTopology(topo)
+	if err != nil {
+		return "", err
+	}
+
 	return RenderCompose(topo, result)
 }
 
-func RenderCompose(topo Topology, result ConversionResult) string {
+func RenderCompose(topo Topology, result ConversionResult) (string, error) {
 	var b strings.Builder
 
-	writeHeader(&b, topo)
-	writeServices(&b, topo, result)
+	if err := writeHeader(&b, topo); err != nil {
+		return "", err
+	}
+
+	if err := writeServices(&b, topo, result); err != nil {
+		return "", err
+	}
+
 	writeNetworks(&b, topo)
 
-	return b.String()
+	return b.String(), nil
 }
 
-func writeHeader(b *strings.Builder, topo Topology) {
+func writeHeader(b *strings.Builder, topo Topology) error {
 	alreadyUsedTemplates := []string{}
+
 	for _, node := range topo.Nodes {
 		nodeName := SanitizeName(node.ID)
 		nodeRole := node.Role
-		generateScriptFiles(nodeName, nodeRole)
+
+		if err := generateScriptFiles(nodeName, nodeRole); err != nil {
+			return fmt.Errorf(
+				"failed to generate scripts for %s: %w",
+				node.ID,
+				err,
+			)
+		}
+
 		if !slices.Contains(alreadyUsedTemplates, nodeRole) {
 			alreadyUsedTemplates = append(alreadyUsedTemplates, nodeRole)
 			writeTemplate(b, nodeRole)
 		}
-
 	}
+
 	b.WriteString(`x-netem-env: &netem_env
   DELAY_MEAN: 1ms
   DELAY_JITTER: 0.3ms
@@ -42,21 +61,40 @@ func writeHeader(b *strings.Builder, topo Topology) {
 
 services:
 `)
+
+	return nil
 }
 
-func writeServices(b *strings.Builder, topo Topology, result ConversionResult) {
+func writeServices(
+	b *strings.Builder,
+	topo Topology,
+	result ConversionResult,
+) error {
 	for _, node := range topo.Nodes {
+		var err error
+
 		if IsRouter(node.Role) {
-			writeRouterService(b, node, topo, result)
+			err = writeRouterService(b, node, topo, result)
 		} else {
-			writeDeviceService(b, topo, node, result)
+			err = writeDeviceService(b, topo, node, result)
+		}
+
+		if err != nil {
+			return err
 		}
 
 		b.WriteString("\n")
 	}
+
+	return nil
 }
 
-func writeRouterService(b *strings.Builder, node Node, topo Topology, result ConversionResult) {
+func writeRouterService(
+	b *strings.Builder,
+	node Node,
+	topo Topology,
+	result ConversionResult,
+) error {
 	serviceName := SanitizeName(node.ID)
 	duration := 300
 	b.WriteString(fmt.Sprintf("  %s:\n", serviceName))
@@ -81,9 +119,19 @@ func writeRouterService(b *strings.Builder, node Node, topo Topology, result Con
 
 		for _, link := range topo.Links {
 			if link.Network == net {
-				if err := generateDelay(serviceName, link.Distance, ethNumber); err != nil {
-					return
+				if err := generateDelay(
+					serviceName,
+					link.Distance,
+					ethNumber,
+				); err != nil {
+					return fmt.Errorf(
+						"failed to generate delay script for %s on %s: %w",
+						node.ID,
+						net,
+						err,
+					)
 				}
+
 				ethNumber++
 				seenNetworks[net] = true
 				break
@@ -92,6 +140,9 @@ func writeRouterService(b *strings.Builder, node Node, topo Topology, result Con
 	}
 
 	writeServiceNetworks(b, node.ID, result)
+
+	return nil
+
 }
 
 func writeDeviceService(
@@ -99,7 +150,7 @@ func writeDeviceService(
 	topo Topology,
 	node Node,
 	result ConversionResult,
-) {
+) error {
 	serviceName := SanitizeName(node.ID)
 	nodeRole := node.Role
 	nodeID := node.ID
@@ -118,13 +169,30 @@ func writeDeviceService(
 	writeVolumes(b, serviceName, nodeRole)
 	for _, traffic := range topo.Traffic {
 		if traffic.Source == nodeID {
-			sourceName := SanitizeName((traffic.Source))
+			sourceName := SanitizeName(traffic.Source)
 			destinationName := SanitizeName(traffic.Destination)
-			generateTraffic(sourceName, destinationName, traffic.DestinationIP, traffic.Type, traffic.Duration)
+
+			if err := generateTraffic(
+				sourceName,
+				destinationName,
+				traffic.DestinationIP,
+				traffic.Type,
+				traffic.Duration,
+			); err != nil {
+				return fmt.Errorf(
+					"failed to generate %s traffic from %s to %s: %w",
+					traffic.Type,
+					traffic.Source,
+					traffic.Destination,
+					err,
+				)
+			}
 		}
 	}
 
 	writeServiceNetworks(b, node.ID, result)
+
+	return nil
 }
 
 func writeServiceNetworks(

@@ -6,8 +6,13 @@ import (
 	"strings"
 )
 
+// These variables make command execution replaceable in tests.
+var runCommandFunc = runCommand
+var commandOutputFunc = commandOutput
+var combinedOutputFunc = combinedOutput
+
 func ComposeUp(projectName string, composeFile string) error {
-	return runCommand(
+	return runCommandFunc(
 		"docker",
 		"compose",
 		"-p", projectName,
@@ -19,7 +24,7 @@ func ComposeUp(projectName string, composeFile string) error {
 }
 
 func ComposeDown(projectName string, composeFile string) error {
-	return runCommand(
+	return runCommandFunc(
 		"docker",
 		"compose",
 		"-p", projectName,
@@ -29,7 +34,7 @@ func ComposeDown(projectName string, composeFile string) error {
 }
 
 func ComposeStop(projectName string, composeFile string) error {
-	return runCommand(
+	return runCommandFunc(
 		"docker",
 		"compose",
 		"-p", projectName,
@@ -38,8 +43,11 @@ func ComposeStop(projectName string, composeFile string) error {
 	)
 }
 
-func ComposeContainerIDs(projectName string, composeFile string) ([]string, error) {
-	output, err := commandOutput(
+func ComposeContainerIDs(
+	projectName string,
+	composeFile string,
+) ([]string, error) {
+	output, err := commandOutputFunc(
 		"docker",
 		"compose",
 		"-p", projectName,
@@ -55,8 +63,10 @@ func ComposeContainerIDs(projectName string, composeFile string) ([]string, erro
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 
 	var ids []string
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
+
 		if line != "" {
 			ids = append(ids, line)
 		}
@@ -67,8 +77,10 @@ func ComposeContainerIDs(projectName string, composeFile string) ([]string, erro
 
 func runCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
+
 	cmd.Stdout = nil
 	cmd.Stderr = nil
+
 	return cmd.Run()
 }
 
@@ -86,4 +98,15 @@ func commandOutput(name string, args ...string) (string, error) {
 	}
 
 	return stdout.String(), nil
+}
+
+func combinedOutput(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), err
+	}
+
+	return string(output), nil
 }

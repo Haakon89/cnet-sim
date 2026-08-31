@@ -3,29 +3,37 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const router = express.Router();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// routes/ is one level below backend root
-const backendRoot = path.join(__dirname, "..");
+const defaultOutputPath = path.join(
+  __dirname,
+  "../converter/json_files/topology.json"
+);
 
-router.post("/save", (req, res) => {
-  console.log("Received topology save request");
+export function createTopologyRouter(
+  outputPath = defaultOutputPath
+) {
+  const router = express.Router();
 
-  const topology = req.body;
+  router.post("/save", (req, res) => {
+    console.log("Received topology save request");
 
-  const outputDir = path.join(backendRoot, "converter", "json_files");
-  const outputPath = path.join(outputDir, "topology.json");
+    fs.mkdirSync(path.dirname(outputPath), {
+      recursive: true,
+    });
 
-  fs.mkdirSync(outputDir, { recursive: true });
-  fs.writeFileSync(outputPath, JSON.stringify(topology, null, 2));
+    fs.writeFileSync(
+      outputPath,
+      JSON.stringify(req.body, null, 2)
+    );
 
-  res.json({
-    message: "Saved",
-    path: outputPath,
+    res.json({
+      message: "Saved",
+    });
   });
-});
 
-export default router;
+  return router;
+}
+
+export default createTopologyRouter();

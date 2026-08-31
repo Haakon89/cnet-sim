@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -21,11 +20,9 @@ func CollectFromRouters(
 
 	runDir := filepath.Join(outputDir, projectName)
 
-	if err := EnsureDir(runDir); err != nil {
-		return err
+	if err := PrepareResultsDir(runDir); err != nil {
+		return fmt.Errorf("failed to prepare results directory: %w", err)
 	}
-
-	PrepareResultsDir(runDir)
 
 	for _, containerID := range containerIDs {
 		name, err := ContainerName(containerID)
@@ -55,7 +52,7 @@ func CollectFromRouters(
 }
 
 func ContainerName(containerID string) (string, error) {
-	output, err := commandOutput(
+	output, err := commandOutputFunc(
 		"docker",
 		"inspect",
 		"--format",
@@ -91,13 +88,25 @@ func PrepareResultsDir(outputDir string) error {
 	return os.MkdirAll(abs, 0755)
 }
 
-func DockerCopy(containerID string, sourcePath string, targetDir string) error {
+func DockerCopy(
+	containerID string,
+	sourcePath string,
+	targetDir string,
+) error {
 	source := fmt.Sprintf("%s:%s/.", containerID, sourcePath)
 
-	cmd := exec.Command("docker", "cp", source, targetDir)
-	output, err := cmd.CombinedOutput()
+	output, err := combinedOutputFunc(
+		"docker",
+		"cp",
+		source,
+		targetDir,
+	)
 	if err != nil {
-		return fmt.Errorf("docker cp failed: %w\n%s", err, string(output))
+		return fmt.Errorf(
+			"docker cp failed: %w\n%s",
+			err,
+			output,
+		)
 	}
 
 	return nil

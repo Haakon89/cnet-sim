@@ -21,7 +21,15 @@ func main() {
 	if err := json.Unmarshal(data, &topo); err != nil {
 		panic(err)
 	}
-	CleanEnvironment()
-	compose := ConvertTopologyToCompose(topo)
+	if err := CleanEnvironment(); err != nil {
+		fmt.Fprintln(os.Stderr, "failed to clean environment:", err)
+		os.Exit(1)
+	}
+	compose, err := ConvertTopologyToCompose(topo)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "conversion failed:", err)
+		os.Exit(1)
+	}
+
 	fmt.Print(compose)
 }

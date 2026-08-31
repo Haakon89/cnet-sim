@@ -6,13 +6,20 @@ import (
 	"strings"
 )
 
-func generateScriptFiles(deviceName string, deviceRole string) {
+func generateScriptFiles(deviceName string, deviceRole string) error {
 	if IsRouter(deviceRole) {
-		generateDistanceDelayScript(deviceName)
-	} else {
-		generateStartupScript(deviceName)
-		generateWorkloadScript(deviceName)
+		return generateDistanceDelayScript(deviceName)
 	}
+
+	if err := generateStartupScript(deviceName); err != nil {
+		return err
+	}
+
+	if err := generateWorkloadScript(deviceName); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func writeVolumes(b *strings.Builder, deviceName string, deviceRole string) {
