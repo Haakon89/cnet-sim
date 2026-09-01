@@ -53,25 +53,37 @@ export function createTemplateRouter(
       resolvedTemplateDir
     );
 
-    const candidatePath = path.join(
+    const candidatePath = path.resolve(
       canonicalRoot,
       `${name}.json`
     );
 
+    const relativePath = path.relative(
+      canonicalRoot,
+      candidatePath
+    );
+
+    if (
+      relativePath.startsWith("..") ||
+      path.isAbsolute(relativePath)
+    ) {
+      const err = new Error("Invalid template path");
+      err.code = "INVALID_TEMPLATE_PATH";
+      throw err;
+    }
+
     try {
-      // Existing files may be symbolic links, so resolve
-      // their real filesystem location before using them.
       const canonicalCandidate =
         await fs.realpath(candidatePath);
 
-      const rootWithSep =
-        canonicalRoot.endsWith(path.sep)
-          ? canonicalRoot
-          : canonicalRoot + path.sep;
+      const canonicalRelativePath = path.relative(
+        canonicalRoot,
+        canonicalCandidate
+      );
 
       if (
-        canonicalCandidate !== canonicalRoot &&
-        !canonicalCandidate.startsWith(rootWithSep)
+        canonicalRelativePath.startsWith("..") ||
+        path.isAbsolute(canonicalRelativePath)
       ) {
         const err = new Error("Invalid template path");
         err.code = "INVALID_TEMPLATE_PATH";
@@ -84,21 +96,26 @@ export function createTemplateRouter(
         throw err;
       }
 
-      // A new template will not exist yet.
-      // Because template names cannot contain path
-      // separators, it is safe to create directly
-      // under canonicalRoot.
       if (err.code === "ENOENT") {
         return candidatePath;
       }
 
-      // Permission errors, I/O errors, etc. are genuine
-      // filesystem failures and should not be treated as
-      // "file does not exist".
       throw err;
     }
   }
 
+  async function saveTemplateFile(name, template) {
+    const templatePath = await resolveTemplatePath(name);
+
+    await fs.writeFile(
+      templatePath,
+      JSON.stringify(template, null, 2),
+      {
+        encoding: "utf8",
+        flag: "wx",
+      }
+    );
+  }
   const router = express.Router();
 
   router.get("/", listLimiter, async (req, res) => {
@@ -184,10 +201,8 @@ export function createTemplateRouter(
         });
       }
 
-      let templatePath;
-
       try {
-        templatePath = await resolveTemplatePath(name);
+        await saveTemplateFile(name, template);
       } catch (err) {
         if (err.code === "INVALID_TEMPLATE_PATH") {
           return res.status(400).json({
@@ -195,26 +210,6 @@ export function createTemplateRouter(
           });
         }
 
-        console.error(
-          "Failed to resolve template path:",
-          err
-        );
-
-        return res.status(500).json({
-          error: "Failed to access template storage",
-        });
-      }
-
-      try {
-        await fs.writeFile(
-          templatePath,
-          JSON.stringify(template, null, 2),
-          {
-            encoding: "utf8",
-            flag: "wx",
-          }
-        );
-      } catch (err) {
         if (err.code === "EEXIST") {
           return res.status(409).json({
             error: "Template name already exists",
