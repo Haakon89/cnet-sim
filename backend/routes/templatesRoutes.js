@@ -145,28 +145,42 @@ export function createTemplateRouter(
   router.get("/:name", readLimiter, async (req, res) => {
     const name = req.params.name;
 
-    let templatePath;
-
-    try {
-      templatePath = await resolveTemplatePath(name);
-    } catch (err) {
-      if (err.code === "INVALID_TEMPLATE_PATH") {
-        return res.status(400).json({
-          error: "Invalid template name",
-        });
-      }
-
-      console.error(
-        "Failed to resolve template path:",
-        err
-      );
-
-      return res.status(500).json({
-        error: "Failed to access template storage",
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      return res.status(400).json({
+        error: "Invalid template name",
       });
     }
 
     try {
+      const canonicalRoot =
+        await fs.realpath(resolvedTemplateDir);
+
+      const entries = await fs.readdir(
+        canonicalRoot,
+        {
+          withFileTypes: true,
+        }
+      );
+
+      const expectedFilename = `${name}.json`;
+
+      const matchingEntry = entries.find(
+        (entry) =>
+          entry.isFile() &&
+          entry.name === expectedFilename
+      );
+
+      if (!matchingEntry) {
+        return res.status(404).json({
+          error: "Template not found",
+        });
+      }
+
+      const templatePath = path.join(
+        canonicalRoot,
+        matchingEntry.name
+      );
+
       const data = await fs.readFile(
         templatePath,
         "utf8"
@@ -174,12 +188,6 @@ export function createTemplateRouter(
 
       return res.json(JSON.parse(data));
     } catch (err) {
-      if (err.code === "ENOENT") {
-        return res.status(404).json({
-          error: "Template not found",
-        });
-      }
-
       console.error(
         "Failed to load template:",
         err
