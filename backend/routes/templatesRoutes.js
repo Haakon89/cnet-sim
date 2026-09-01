@@ -27,38 +27,68 @@ const templatesReadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const templatesSaveLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 
 export function createTemplateRouter(
   templateDir = DEFAULT_TEMPLATE_DIR,
   listLimiter = templatesListLimiter,
-  readLimiter = templatesReadLimiter
+  readLimiter = templatesReadLimiter,
+  saveLimiter = templatesSaveLimiter
 ) {
   const resolvedTemplateDir = path.resolve(templateDir);
 
-  function resolveTemplatePath(name) {
+  async function resolveTemplatePath(name) {
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
       throw new Error("Invalid template name");
     }
 
-    const candidatePath = path.resolve(
-      resolvedTemplateDir,
+    // Resolve the real location of the templates directory.
+    const canonicalRoot = await fs.realpath(
+      resolvedTemplateDir
+    );
+
+    const candidatePath = path.join(
+      canonicalRoot,
       `${name}.json`
     );
 
-    const templateRootWithSep =
-      resolvedTemplateDir.endsWith(path.sep)
-        ? resolvedTemplateDir
-        : resolvedTemplateDir + path.sep;
+    try {
+      // If the file already exists, resolve symlinks too.
+      const canonicalCandidate =
+        await fs.realpath(candidatePath);
 
-    if (
-      candidatePath !== resolvedTemplateDir &&
-      !candidatePath.startsWith(templateRootWithSep)
-    ) {
-      throw new Error("Invalid template path");
+      const rootWithSep =
+        canonicalRoot.endsWith(path.sep)
+          ? canonicalRoot
+          : canonicalRoot + path.sep;
+
+      if (
+        canonicalCandidate !== canonicalRoot &&
+        !canonicalCandidate.startsWith(rootWithSep)
+      ) {
+        throw new Error("Invalid template path");
+      }
+
+      return canonicalCandidate;
+    } catch (err) {
+      // A security/path error that we threw ourselves
+      // should not be treated as "file doesn't exist".
+      if (err.message === "Invalid template path") {
+        throw err;
+      }
+
+      // For a new file, realpath fails because the file
+      // doesn't exist yet. Since filenames cannot contain
+      // directories, creating it directly under
+      // canonicalRoot is safe.
+      return candidatePath;
     }
-
-    return candidatePath;
   }
 
   const router = express.Router();
@@ -87,7 +117,7 @@ export function createTemplateRouter(
     let templatePath;
 
     try {
-      templatePath = resolveTemplatePath(name);
+      templatePath = await resolveTemplatePath(name);
     } catch {
       return res.status(400).json({
         error: "Invalid template name",
@@ -113,7 +143,7 @@ export function createTemplateRouter(
     }
   });
 
-  router.post("/save", async (req, res) => {
+  router.post("/save", saveLimiter, async (req, res) => {
     try {
       const { name, template } = req.body;
 
@@ -126,7 +156,7 @@ export function createTemplateRouter(
       let templatePath;
 
       try {
-        templatePath = resolveTemplatePath(name);
+        templatePath = await resolveTemplatePath(name);
       } catch {
         return res.status(400).json({
           error: "Invalid template name",
@@ -134,21 +164,23 @@ export function createTemplateRouter(
       }
 
       try {
-        await fs.access(templatePath);
+        await fs.writeFile(
+          templatePath,
+          JSON.stringify(template, null, 2),
+          {
+            encoding: "utf8",
+            flag: "wx",
+          }
+        );
+      } catch (err) {
+        if (err.code === "EEXIST") {
+          return res.status(409).json({
+            error: "Template name already exists",
+          });
+        }
 
-        return res.status(409).json({
-          error: "Template name already exists",
-        });
-      } catch {
-        // fs.access failed, so the file does not exist.
-        // It is safe to create it.
+        throw err;
       }
-
-      await fs.writeFile(
-        templatePath,
-        JSON.stringify(template, null, 2),
-        "utf8"
-      );
 
       return res.json({
         message: "Saved",
@@ -166,7 +198,6 @@ export function createTemplateRouter(
       });
     }
   });
-
   return router;
 }
 
