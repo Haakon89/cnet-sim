@@ -34,9 +34,12 @@ beforeEach(() => {
   app = express();
   app.use(express.json());
 
+  const noRateLimit = (req, res, next) => next();
+
   app.use(
     "/api/topology",
-    createTopologyRouter(outputPath)
+    createTopologyRouter(outputPath),
+    noRateLimit
   );
 });
 

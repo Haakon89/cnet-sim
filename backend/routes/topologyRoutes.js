@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -11,12 +12,20 @@ const defaultOutputPath = path.join(
   "../converter/json_files/topology.json"
 );
 
+const topologyLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export function createTopologyRouter(
-  outputPath = defaultOutputPath
+  outputPath = defaultOutputPath,
+  limiter = topologyLimiter
 ) {
   const router = express.Router();
 
-  router.post("/save", (req, res) => {
+  router.post("/save", limiter, (req, res) => {
     console.log("Received topology save request");
 
     fs.mkdirSync(path.dirname(outputPath), {
