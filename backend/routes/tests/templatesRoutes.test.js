@@ -29,6 +29,7 @@ app.use(
   createTemplateRouter(
     templateDir,
     noRateLimit,
+    noRateLimit,
     noRateLimit
   )
 );
