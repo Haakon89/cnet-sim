@@ -2,16 +2,35 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import rateLimit from "express-rate-limit";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const DEFAULT_RESULTS_DIR = path.join(__dirname, "..", "results");
+
+const resultsListLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const resultsDownloadLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export function createResultsRouter(
-  resultsDir = path.join(__dirname, "..", "results")
+  resultsDir = DEFAULT_RESULTS_DIR,
+  listLimiter = resultsListLimiter,
+  downloadLimiter = resultsDownloadLimiter
 ) {
   const router = express.Router();
 
-  router.get("/", (req, res) => {
+  router.get("/", listLimiter, (req, res) => {
     if (!fs.existsSync(resultsDir)) {
       return res.json([]);
     }
@@ -19,15 +38,15 @@ export function createResultsRouter(
     res.json(walkResults(resultsDir, resultsDir));
   });
 
-  router.get("/download", (req, res) => {
+  router.get("/download", downloadLimiter, (req, res) => {
     const relativePath = req.query.path;
 
     if (!relativePath) {
       return res.status(400).send("Missing file path");
     }
 
-    const filePath = path.resolve(resultsDir, relativePath);
     const safeRoot = path.resolve(resultsDir);
+    const filePath = path.resolve(safeRoot, relativePath);
 
     // Prevent access to files outside resultsDir
     if (!filePath.startsWith(safeRoot + path.sep)) {

@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -12,14 +13,59 @@ const DEFAULT_TEMPLATE_DIR = path.join(
   "templates"
 );
 
+const templatesListLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const templatesReadLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+
+
 export function createTemplateRouter(
-  templateDir = DEFAULT_TEMPLATE_DIR
+  templateDir = DEFAULT_TEMPLATE_DIR,
+  listLimiter = templatesListLimiter,
+  readLimiter = templatesReadLimiter
 ) {
+  const resolvedTemplateDir = path.resolve(templateDir);
+
+  function resolveTemplatePath(name) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      throw new Error("Invalid template name");
+    }
+
+    const candidatePath = path.resolve(
+      resolvedTemplateDir,
+      `${name}.json`
+    );
+
+    const templateRootWithSep =
+      resolvedTemplateDir.endsWith(path.sep)
+        ? resolvedTemplateDir
+        : resolvedTemplateDir + path.sep;
+
+    if (
+      candidatePath !== resolvedTemplateDir &&
+      !candidatePath.startsWith(templateRootWithSep)
+    ) {
+      throw new Error("Invalid template path");
+    }
+
+    return candidatePath;
+  }
+
   const router = express.Router();
 
-  router.get("/", async (req, res) => {
+  router.get("/", listLimiter, async (req, res) => {
     try {
-      const files = await fs.readdir(templateDir);
+      const files = await fs.readdir(resolvedTemplateDir);
 
       const templates = files
         .filter((file) => file.endsWith(".json"))
@@ -27,28 +73,28 @@ export function createTemplateRouter(
 
       res.json({ templates });
     } catch (err) {
-      console.error("Failed to list templates:", err);
+      console.error("Failed to list templates", err);
+
       res.status(500).json({
         error: "Failed to list templates",
       });
     }
   });
 
-  router.get("/:name", async (req, res) => {
+  router.get("/:name", readLimiter, async (req, res) => {
+    const name = req.params.name;
+
+    let templatePath;
+
     try {
-      const name = req.params.name;
+      templatePath = resolveTemplatePath(name);
+    } catch {
+      return res.status(400).json({
+        error: "Invalid template name",
+      });
+    }
 
-      if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-        return res.status(400).json({
-          error: "Invalid template name",
-        });
-      }
-
-      const templatePath = path.join(
-        templateDir,
-        `${name}.json`
-      );
-
+    try {
       const data = await fs.readFile(
         templatePath,
         "utf8"
@@ -69,10 +115,6 @@ export function createTemplateRouter(
 
   router.post("/save", async (req, res) => {
     try {
-      console.log(
-        "Received template save request"
-      );
-
       const { name, template } = req.body;
 
       if (!name || !template) {
@@ -81,16 +123,15 @@ export function createTemplateRouter(
         });
       }
 
-      if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      let templatePath;
+
+      try {
+        templatePath = resolveTemplatePath(name);
+      } catch {
         return res.status(400).json({
           error: "Invalid template name",
         });
       }
-
-      const templatePath = path.join(
-        templateDir,
-        `${name}.json`
-      );
 
       try {
         await fs.access(templatePath);
@@ -99,7 +140,8 @@ export function createTemplateRouter(
           error: "Template name already exists",
         });
       } catch {
-        // File does not exist, so it can be created.
+        // fs.access failed, so the file does not exist.
+        // It is safe to create it.
       }
 
       await fs.writeFile(
@@ -108,7 +150,7 @@ export function createTemplateRouter(
         "utf8"
       );
 
-      res.json({
+      return res.json({
         message: "Saved",
         name,
         path: templatePath,
@@ -119,7 +161,7 @@ export function createTemplateRouter(
         err
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         error: "Failed to save template",
       });
     }

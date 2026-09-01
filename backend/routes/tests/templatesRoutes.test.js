@@ -22,13 +22,23 @@ const app = express();
 
 app.use(express.json());
 
+const noRateLimit = (req, res, next) => next();
+
 app.use(
   "/api/templates",
-  createTemplateRouter(templateDir)
+  createTemplateRouter(
+    templateDir,
+    noRateLimit,
+    noRateLimit
+  )
 );
 
 describe("template routes", () => {
   beforeEach(async () => {
+    await fs.mkdir(templateDir, {
+      recursive: true,
+    });
+
     try {
       await fs.unlink(testTemplatePath);
     } catch {

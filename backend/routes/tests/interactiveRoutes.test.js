@@ -26,10 +26,10 @@ describe("interactive routes", () => {
     const execFileMock = vi.fn();
 
     const app = express();
-
+    const noRateLimit = (req, res, next) => next();
     app.use(
       "/api/interactive",
-      createInteractiveRouter(execFileMock)
+      createInteractiveRouter(execFileMock, noRateLimit)
     );
 
     const response = await request(app)

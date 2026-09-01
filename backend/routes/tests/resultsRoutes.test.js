@@ -14,9 +14,15 @@ const resultsDir = path.join(__dirname, "testdata", "results");
 
 const app = express();
 
+const noRateLimit = (req, res, next) => next();
+
 app.use(
   "/api/results",
-  createResultsRouter(resultsDir)
+  createResultsRouter(
+    resultsDir,
+    noRateLimit,
+    noRateLimit
+  )
 );
 
 describe("results routes", () => {
