@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // routes/ -> ../animation
-const ANIM_DIR = path.join(__dirname, "..", "results/animation");
+const ANIM_DIR = path.join(__dirname, "..", "animation");
 
 router.get("/", async (req, res) => {
   try {

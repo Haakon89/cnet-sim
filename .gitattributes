@@ -1,0 +1,27 @@
+# Normalize text files and store them with Unix LF line endings.
+* text=auto eol=lf
+
+# Explicitly treat common source/config files as text.
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.go    text eol=lf
+*.sh    text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.txt   text eol=lf
+
+# Binary files should never have line endings modified.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.pcap  binary
+*.pcapng binary

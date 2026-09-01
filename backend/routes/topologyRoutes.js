@@ -1,31 +1,48 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const router = express.Router();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// routes/ is one level below backend root
-const backendRoot = path.join(__dirname, "..");
+const defaultOutputPath = path.join(
+  __dirname,
+  "../converter/json_files/topology.json"
+);
 
-router.post("/save", (req, res) => {
-  console.log("Received topology save request");
-
-  const topology = req.body;
-
-  const outputDir = path.join(backendRoot, "converter", "json_files");
-  const outputPath = path.join(outputDir, "topology.json");
-
-  fs.mkdirSync(outputDir, { recursive: true });
-  fs.writeFileSync(outputPath, JSON.stringify(topology, null, 2));
-
-  res.json({
-    message: "Saved",
-    path: outputPath,
-  });
+const topologyLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-export default router;
+export function createTopologyRouter(
+  outputPath = defaultOutputPath,
+  limiter = topologyLimiter
+) {
+  const router = express.Router();
+
+  router.post("/save", limiter, (req, res) => {
+    console.log("Received topology save request");
+
+    fs.mkdirSync(path.dirname(outputPath), {
+      recursive: true,
+    });
+
+    fs.writeFileSync(
+      outputPath,
+      JSON.stringify(req.body, null, 2)
+    );
+
+    res.json({
+      message: "Saved",
+    });
+  });
+
+  return router;
+}
+
+export default createTopologyRouter();

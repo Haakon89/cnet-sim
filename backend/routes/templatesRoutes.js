@@ -1,91 +1,249 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const router = express.Router();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// routes/ -> ../templates
-const TEMPLATE_DIR = path.join(__dirname, "..", "templates");
+const DEFAULT_TEMPLATE_DIR = path.join(
+  __dirname,
+  "..",
+  "templates"
+);
 
-router.get("/", async (req, res) => {
-  try {
-    const files = await fs.readdir(TEMPLATE_DIR);
-
-    const templates = files
-      .filter((file) => file.endsWith(".json"))
-      .map((file) => file.replace(".json", ""));
-
-    res.json({ templates });
-  } catch (err) {
-    console.error("Failed to list templates:", err);
-    res.status(500).json({ error: "Failed to list templates" });
-  }
+const templatesListLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-router.get("/:name", async (req, res) => {
-  try {
-    const name = req.params.name;
-
-    // basic validation
-    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-      return res.status(400).json({ error: "Invalid template name" });
-    }
-
-    const templatePath = path.join(TEMPLATE_DIR, `${name}.json`);
-    const data = await fs.readFile(templatePath, "utf8");
-
-    res.json(JSON.parse(data));
-  } catch (err) {
-    console.error("Failed to load template:", err);
-    res.status(404).json({ error: "Template not found" });
-  }
+const templatesReadLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-router.post("/save", async (req, res) => {
-  try {
-    console.log("Received template save request");
+const templatesSaveLimiter = rateLimit({
+  windowMs: 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
-    const { name, template } = req.body;
+export function createTemplateRouter(
+  templateDir = DEFAULT_TEMPLATE_DIR,
+  listLimiter = templatesListLimiter,
+  readLimiter = templatesReadLimiter,
+  saveLimiter = templatesSaveLimiter
+) {
+  const resolvedTemplateDir = path.resolve(templateDir);
 
-    if (!name || !template) {
-      return res.status(400).json({ error: "Missing name or template" });
-    }
-
+  async function resolveTemplatePath(name) {
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-      return res.status(400).json({ error: "Invalid template name" });
+      const err = new Error("Invalid template name");
+      err.code = "INVALID_TEMPLATE_PATH";
+      throw err;
     }
 
-    const templatePath = path.join(TEMPLATE_DIR, `${name}.json`);
+    const canonicalRoot = await fs.realpath(
+      resolvedTemplateDir
+    );
+
+    const candidatePath = path.resolve(
+      canonicalRoot,
+      `${name}.json`
+    );
+
+    const relativePath = path.relative(
+      canonicalRoot,
+      candidatePath
+    );
+
+    if (
+      relativePath.startsWith("..") ||
+      path.isAbsolute(relativePath)
+    ) {
+      const err = new Error("Invalid template path");
+      err.code = "INVALID_TEMPLATE_PATH";
+      throw err;
+    }
 
     try {
-      await fs.access(templatePath);
+      const canonicalCandidate =
+        await fs.realpath(candidatePath);
 
-      return res.status(409).json({
-        error: "Template name already exists",
-      });
-    } catch {
-      // file does not exist -> continue
+      const canonicalRelativePath = path.relative(
+        canonicalRoot,
+        canonicalCandidate
+      );
+
+      if (
+        canonicalRelativePath.startsWith("..") ||
+        path.isAbsolute(canonicalRelativePath)
+      ) {
+        const err = new Error("Invalid template path");
+        err.code = "INVALID_TEMPLATE_PATH";
+        throw err;
+      }
+
+      return canonicalCandidate;
+    } catch (err) {
+      if (err.code === "INVALID_TEMPLATE_PATH") {
+        throw err;
+      }
+
+      if (err.code === "ENOENT") {
+        return candidatePath;
+      }
+
+      throw err;
     }
-    
+  }
+
+  async function saveTemplateFile(name, template) {
+    const templatePath = await resolveTemplatePath(name);
+
     await fs.writeFile(
       templatePath,
       JSON.stringify(template, null, 2),
-      "utf8"
+      {
+        encoding: "utf8",
+        flag: "wx",
+      }
     );
-
-    res.json({
-      message: "Saved",
-      name,
-      path: templatePath,
-    });
-  } catch (err) {
-    console.error("Failed to save template:", err);
-    res.status(500).json({ error: "Failed to save template" });
   }
-});
+  const router = express.Router();
 
-export default router;
+  router.get("/", listLimiter, async (req, res) => {
+    try {
+      const canonicalRoot =
+        await fs.realpath(resolvedTemplateDir);
+
+      const files = await fs.readdir(canonicalRoot);
+
+      const templates = files
+        .filter((file) => file.endsWith(".json"))
+        .map((file) => file.replace(".json", ""));
+
+      return res.json({ templates });
+    } catch (err) {
+      console.error(
+        "Failed to list templates:",
+        err
+      );
+
+      return res.status(500).json({
+        error: "Failed to list templates",
+      });
+    }
+  });
+
+  router.get("/:name", readLimiter, async (req, res) => {
+    const name = req.params.name;
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      return res.status(400).json({
+        error: "Invalid template name",
+      });
+    }
+
+    try {
+      const canonicalRoot =
+        await fs.realpath(resolvedTemplateDir);
+
+      const entries = await fs.readdir(
+        canonicalRoot,
+        {
+          withFileTypes: true,
+        }
+      );
+
+      const expectedFilename = `${name}.json`;
+
+      const matchingEntry = entries.find(
+        (entry) =>
+          entry.isFile() &&
+          entry.name === expectedFilename
+      );
+
+      if (!matchingEntry) {
+        return res.status(404).json({
+          error: "Template not found",
+        });
+      }
+
+      const templatePath = path.join(
+        canonicalRoot,
+        matchingEntry.name
+      );
+
+      const data = await fs.readFile(
+        templatePath,
+        "utf8"
+      );
+
+      return res.json(JSON.parse(data));
+    } catch (err) {
+      console.error(
+        "Failed to load template:",
+        err
+      );
+
+      return res.status(500).json({
+        error: "Failed to load template",
+      });
+    }
+  });
+
+  router.post("/save", saveLimiter, async (req, res) => {
+    try {
+      const { name, template } = req.body;
+
+      if (!name || !template) {
+        return res.status(400).json({
+          error: "Missing name or template",
+        });
+      }
+
+      try {
+        await saveTemplateFile(name, template);
+      } catch (err) {
+        if (err.code === "INVALID_TEMPLATE_PATH") {
+          return res.status(400).json({
+            error: "Invalid template name",
+          });
+        }
+
+        if (err.code === "EEXIST") {
+          return res.status(409).json({
+            error: "Template name already exists",
+          });
+        }
+
+        throw err;
+      }
+
+      return res.json({
+        message: "Saved",
+        name,
+      });
+    } catch (err) {
+      console.error(
+        "Failed to save template:",
+        err
+      );
+
+      return res.status(500).json({
+        error: "Failed to save template",
+      });
+    }
+  });
+
+  return router;
+}
+
+export default createTemplateRouter();

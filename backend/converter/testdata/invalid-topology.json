@@ -1,0 +1,24 @@
+{
+  "nodes": [
+    {
+      "id": "pc-1",
+      "role": "pc",
+      "networks": ["net1"],
+      "ipAddresses": {},
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  ],
+  "networks": [
+    {
+      "id": "net1",
+      "subnet": "10.1.0.0/24",
+      "nodes": ["pc-1"],
+      "color": "#000000"
+    }
+  ],
+  "links": [],
+  "trafficFlows": []
+}

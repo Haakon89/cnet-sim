@@ -1,0 +1,86 @@
+x-pc-template: &pc_template
+  build:
+    context: ./pc
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+
+x-router-template: &router_template
+  build:
+    context: ./router
+  sysctls:
+    net.ipv4.ip_forward: "1"
+    net.ipv4.conf.all.rp_filter: "0"
+    net.ipv4.conf.default.rp_filter: "0"
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+
+x-netem-env: &netem_env
+  DELAY_MEAN: 1ms
+  DELAY_JITTER: 0.3ms
+  LOSS: 0.1%
+  RATE: 50mbit
+
+services:
+  pc1:
+    <<: *pc_template
+    container_name: pc1
+    environment:
+      <<: *netem_env
+      DEVICE_NAME: pc1
+      IFACE: eth0
+      GW: 10.1.0.2
+      STARTUP_SCRIPT: /usr/local/bin/startup.sh
+      WORKLOAD_SCRIPT: /usr/local/bin/workload.sh
+    volumes:
+      - ./traffic_scripts/pc1_startup.sh:/usr/local/bin/startup.sh:ro
+      - ./traffic_scripts/pc1_workload.sh:/usr/local/bin/workload.sh:ro
+    networks:
+      net1:
+        ipv4_address: 10.1.0.10
+
+  pc2:
+    <<: *pc_template
+    container_name: pc2
+    environment:
+      <<: *netem_env
+      DEVICE_NAME: pc2
+      IFACE: eth0
+      GW: 10.2.0.2
+      STARTUP_SCRIPT: /usr/local/bin/startup.sh
+      WORKLOAD_SCRIPT: /usr/local/bin/workload.sh
+    volumes:
+      - ./traffic_scripts/pc2_startup.sh:/usr/local/bin/startup.sh:ro
+      - ./traffic_scripts/pc2_workload.sh:/usr/local/bin/workload.sh:ro
+    networks:
+      net2:
+        ipv4_address: 10.2.0.10
+
+  router3:
+    <<: *router_template
+    container_name: router3
+    environment:
+      <<: *netem_env
+      DEVICE_NAME: router3
+      CAPTURE_DURATION: 300
+      DELAY_SCRIPT: /usr/local/bin/delay.sh
+    volumes:
+      - ./traffic_scripts/router3_delay.sh:/usr/local/bin/delay.sh:ro
+    networks:
+      net1:
+        ipv4_address: 10.1.0.2
+      net2:
+        ipv4_address: 10.2.0.2
+
+networks:
+  net1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.1.0.0/24
+  net2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.2.0.0/24

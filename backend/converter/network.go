@@ -11,21 +11,28 @@ type ConversionResult struct {
 	RoutesByRouter map[string][]string
 }
 
-func ConvertTopology(topo Topology) ConversionResult {
+func ConvertTopology(topo Topology) (ConversionResult, error) {
 	nodeByID := map[string]Node{}
 
 	for _, node := range topo.Nodes {
 		nodeByID[node.ID] = node
 	}
 
-	ipByNodeNet := AssignIPs(topo, nodeByID)
+	ipByNodeNet, err := AssignIPs(topo, nodeByID)
+	if err != nil {
+		return ConversionResult{}, fmt.Errorf(
+			"failed to assign IP addresses: %w",
+			err,
+		)
+	}
+
 	routesByRouter := BuildRoutes(topo, nodeByID, ipByNodeNet)
 
 	return ConversionResult{
 		NodeByID:       nodeByID,
 		IPByNodeNet:    ipByNodeNet,
 		RoutesByRouter: routesByRouter,
-	}
+	}, nil
 }
 
 func generateDelay(sourceName string, distance int, netInterface int) error {
@@ -54,19 +61,30 @@ func calculateDelay(distance int) float64 {
 	return (float64(distance) / propagationSpeed) * 1000
 }
 
-func AssignIPs(topo Topology, nodeByID map[string]Node) map[string]map[string]string {
+func AssignIPs(
+	topo Topology,
+	nodeByID map[string]Node,
+) (map[string]map[string]string, error) {
 	result := map[string]map[string]string{}
 
 	for _, network := range topo.Networks {
 		for _, nodeID := range network.Nodes {
 			node, ok := nodeByID[nodeID]
 			if !ok {
-				panic("node not found: " + nodeID)
+				return nil, fmt.Errorf(
+					"node %q referenced by network %q was not found",
+					nodeID,
+					network.ID,
+				)
 			}
 
 			ip, ok := node.IPAddresses[network.ID]
 			if !ok || ip == "" {
-				panic("missing IP for node " + nodeID + " on network " + network.ID)
+				return nil, fmt.Errorf(
+					"missing IP for node %q on network %q",
+					nodeID,
+					network.ID,
+				)
 			}
 
 			if result[nodeID] == nil {
@@ -77,9 +95,8 @@ func AssignIPs(topo Topology, nodeByID map[string]Node) map[string]map[string]st
 		}
 	}
 
-	return result
+	return result, nil
 }
-
 func BuildRoutes(
 	topo Topology,
 	nodeByID map[string]Node,

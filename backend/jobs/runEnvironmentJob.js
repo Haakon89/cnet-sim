@@ -12,10 +12,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const backendRoot = path.join(__dirname, "..");
 
-
 function updateRun(runId, patch) {
   const run = runs.get(runId);
   if (!run) return;
+
   Object.assign(run, patch);
 }
 
@@ -24,162 +24,267 @@ function addLog(runId, message) {
   if (!run) return;
 
   const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+
   run.logs.push(line);
+
   console.log(`[${runId}] ${message}`);
 }
 
-function runSpawnedCommand(runId, command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      ...options,
-      shell: false,
+export function createEnvironmentJobs({
+  execFileFn = execFileAsync,
+  spawnFn = spawn,
+  fsModule = fs,
+  rootDir = backendRoot,
+} = {}) {
+  function runSpawnedCommand(
+    runId,
+    command,
+    args,
+    options = {}
+  ) {
+    return new Promise((resolve, reject) => {
+      const child = spawnFn(command, args, {
+        ...options,
+        shell: false,
+      });
+
+      updateRun(runId, {
+        process: child,
+      });
+
+      child.stdout.on("data", (data) => {
+        const lines = data
+          .toString()
+          .split(/\r?\n/)
+          .filter(Boolean);
+
+        for (const line of lines) {
+          addLog(runId, line);
+
+          if (line.includes("[+] Starting environment")) {
+            updateRun(runId, {
+              step: "building",
+            });
+          }
+
+          if (line.includes("[+] Environment running")) {
+            updateRun(runId, {
+              step: "running",
+              runningStartedAt: Date.now(),
+            });
+          }
+
+          if (line.includes("[+] Collecting router files")) {
+            updateRun(runId, {
+              step: "collecting",
+            });
+          }
+
+          if (line.includes("[+] Removing environment")) {
+            updateRun(runId, {
+              step: "shutting_down",
+            });
+          }
+        }
+      });
+
+      child.stderr.on("data", (data) => {
+        const lines = data
+          .toString()
+          .split(/\r?\n/)
+          .filter(Boolean);
+
+        for (const line of lines) {
+          addLog(runId, `[stderr] ${line}`);
+        }
+      });
+
+      child.on("error", reject);
+
+      child.on("close", (code) => {
+        updateRun(runId, {
+          process: null,
+        });
+
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(
+            new Error(`${command} exited with code ${code}`)
+          );
+        }
+      });
     });
+  }
 
-    updateRun(runId, { process: child });
+  async function runEnvironmentJob(runId) {
+    const run = runs.get(runId);
 
-    child.stdout.on("data", (data) => {
-      const lines = data.toString().split(/\r?\n/).filter(Boolean);
+    if (!run) return;
 
-      for (const line of lines) {
-        addLog(runId, line);
+    try {
+      const converterDir = path.join(
+        rootDir,
+        "converter"
+      );
 
-        if (line.includes("[+] Starting environment")) {
-          updateRun(runId, { step: "building" });
+      const runnerDir = path.join(
+        rootDir,
+        "runner"
+      );
+
+      const topologyPath = path.join(
+        converterDir,
+        "json_files",
+        "topology.json"
+      );
+
+      const composePath = path.join(
+        converterDir,
+        "yml_files",
+        "docker-compose.yml"
+      );
+
+      const resultsDir = path.join(
+        rootDir,
+        "results"
+      );
+
+      updateRun(runId, {
+        composePath,
+      });
+
+      fsModule.mkdirSync(
+        path.dirname(composePath),
+        {
+          recursive: true,
         }
+      );
 
-        if (line.includes("[+] Environment running")) {
-          updateRun(runId, {
-            step: "running",
-            runningStartedAt: Date.now(),
-          });
+      fsModule.mkdirSync(resultsDir, {
+        recursive: true,
+      });
+
+      updateRun(runId, {
+        status: "active",
+        step: "converting",
+      });
+
+      addLog(
+        runId,
+        "Converting topology JSON to docker-compose.yml"
+      );
+
+      const converterResult = await execFileFn(
+        "go",
+        ["run", ".", topologyPath],
+        {
+          cwd: converterDir,
         }
+      );
 
-        if (line.includes("[+] Collecting router files")) {
-          updateRun(runId, { step: "collecting" });
-        }
+      fsModule.writeFileSync(
+        composePath,
+        converterResult.stdout
+      );
 
-        if (line.includes("[+] Removing environment")) {
-          updateRun(runId, { step: "shutting_down" });
-        }
-      }
-    });
+      addLog(
+        runId,
+        "docker-compose.yml created"
+      );
 
-    child.stderr.on("data", (data) => {
-      const lines = data.toString().split(/\r?\n/).filter(Boolean);
-      for (const line of lines) {
-        addLog(runId, `[stderr] ${line}`);
-      }
-    });
+      updateRun(runId, {
+        step: "building",
+      });
 
-    child.on("error", reject);
+      addLog(
+        runId,
+        "Starting Docker environment"
+      );
 
-    child.on("close", (code) => {
-      updateRun(runId, { process: null });
+      const runnerCommand = path.join(
+        runnerDir,
+        "runner"
+      );
 
-      if (code === 0) {
-        resolve();
+      const runnerArgs = [
+        "--compose",
+        composePath,
+        "--output",
+        resultsDir,
+      ];
+
+      if (run.interactive) {
+        runnerArgs.push("--interactive");
       } else {
-        reject(new Error(`${command} exited with code ${code}`));
+        runnerArgs.push(
+          "--duration",
+          `${run.durationSeconds}s`
+        );
       }
-    });
-  });
-}
 
-export async function runEnvironmentJob(runId) {
-  const run = runs.get(runId);
-  if (!run) return;
+      await runSpawnedCommand(
+        runId,
+        runnerCommand,
+        runnerArgs,
+        {
+          cwd: runnerDir,
+        }
+      );
 
-  try {
-    const converterDir = path.join(backendRoot, "converter");
-    const runnerDir = path.join(backendRoot, "runner");
+      updateRun(runId, {
+        status: "finished",
+        step: "finished",
+        finishedAt: Date.now(),
+      });
 
-    const topologyPath = path.join(
-      converterDir,
-      "json_files",
-      "topology.json"
-    );
+      addLog(runId, "Finished");
+    } catch (error) {
+      updateRun(runId, {
+        status: "failed",
+        step: "failed",
+        finishedAt: Date.now(),
+        error: error.message ?? String(error),
+      });
 
-    const composePath = path.join(
-      converterDir,
-      "yml_files",
-      "docker-compose.yml"
-    );
+      addLog(
+        runId,
+        `Failed: ${error.message ?? error}`
+      );
+    }
+  }
 
-    updateRun(runId, { composePath });
+  function stopEnvironmentJob(runId) {
+    const run = runs.get(runId);
 
-    const resultsDir = path.join(backendRoot, "results");
-
-    fs.mkdirSync(path.dirname(composePath), { recursive: true });
-    fs.mkdirSync(resultsDir, { recursive: true });
-
-    updateRun(runId, { status: "active", step: "converting" });
-    addLog(runId, "Converting topology JSON to docker-compose.yml");
-
-    const converterResult = await execFileAsync(
-      "go",
-      ["run", ".", topologyPath],
-      { cwd: converterDir }
-    );
-
-    fs.writeFileSync(composePath, converterResult.stdout);
-
-    addLog(runId, "docker-compose.yml created");
-
-    updateRun(runId, { step: "building" });
-    addLog(runId, "Starting Docker environment");
-
-    const runnerCommand = path.join(runnerDir, "runner");
-
-    const runnerArgs = [
-      "--compose",
-      composePath,
-      "--output",
-      resultsDir,
-    ];
-
-    if (run.interactive) {
-      runnerArgs.push("--interactive");
-    } else {
-      runnerArgs.push("--duration", `${run.durationSeconds}s`);
+    if (!run?.process) {
+      return false;
     }
 
-    await runSpawnedCommand(runId, runnerCommand, runnerArgs, {
-      cwd: runnerDir,
-    });
+    addLog(
+      runId,
+      "Stopping interactive environment"
+    );
+
+    run.process.kill("SIGTERM");
 
     updateRun(runId, {
-      status: "finished",
-      step: "finished",
-      finishedAt: Date.now(),
+      step: "stopping",
     });
 
-    addLog(runId, "Finished");
-  } catch (error) {
-    updateRun(runId, {
-      status: "failed",
-      step: "failed",
-      finishedAt: Date.now(),
-      error: error.message ?? String(error),
-    });
-
-    addLog(runId, `Failed: ${error.message ?? error}`);
-  }
-}
-
-export function stopEnvironmentJob(runId) {
-  const run = runs.get(runId);
-
-  if (!run?.process) {
-    return false;
+    return true;
   }
 
-  addLog(runId, "Stopping interactive environment");
-
-  run.process.kill("SIGTERM");
-
-  updateRun(runId, {
-    step: "stopping",
-  });
-
-  return true;
+  return {
+    runEnvironmentJob,
+    stopEnvironmentJob,
+  };
 }
+
+const jobs = createEnvironmentJobs();
+
+export const runEnvironmentJob =
+  jobs.runEnvironmentJob;
+
+export const stopEnvironmentJob =
+  jobs.stopEnvironmentJob;

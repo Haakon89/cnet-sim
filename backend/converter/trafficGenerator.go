@@ -5,22 +5,30 @@ import (
 	"os"
 )
 
-func generateTraffic(sourceName string, destinationName string, destinationIp string, trafficType string, duration int) {
+func generateTraffic(
+	sourceName string,
+	destinationName string,
+	destinationIp string,
+	trafficType string,
+	duration int,
+) error {
 	switch trafficType {
 	case "icmp":
-		pingTraffic(sourceName, destinationIp, duration)
+		return pingTraffic(sourceName, destinationIp, duration)
 	case "http":
-		httpTraffic(sourceName, destinationIp, duration)
+		return httpTraffic(sourceName, destinationIp, duration)
 	case "tcp":
-		tcpTraffic(sourceName, destinationName, destinationIp, duration)
+		return tcpTraffic(sourceName, destinationName, destinationIp, duration)
 	case "udp":
-		udpTraffic(sourceName, destinationName, destinationIp, duration)
+		return udpTraffic(sourceName, destinationName, destinationIp, duration)
 	case "iperf3":
-		bandwidthTest(sourceName, destinationName, destinationIp, duration)
+		return bandwidthTest(sourceName, destinationName, destinationIp, duration)
 	case "download":
-		downloadFile(sourceName, destinationIp)
+		return downloadFile(sourceName, destinationIp)
 	case "ddos":
-		ddosAttack(sourceName, destinationIp, duration)
+		return ddosAttack(sourceName, destinationIp, duration)
+	default:
+		return fmt.Errorf("unsupported traffic type %q", trafficType)
 	}
 }
 

@@ -19,10 +19,6 @@ func main() {
 
 	projectName := "netsim_test"
 
-	if err := EnsureDir(*outputDir); err != nil {
-		panic(err)
-	}
-
 	fmt.Println("[+] Cleaning up old environment")
 	_ = ComposeDown(projectName, *composeFile)
 
@@ -42,9 +38,6 @@ func main() {
 	if *interactive {
 		fmt.Println("[+] Interactive mode enabled")
 		fmt.Println("[+] Waiting for stop signal")
-
-		stop := make(chan os.Signal, 1)
-		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 		<-stop
 

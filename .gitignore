@@ -12,6 +12,14 @@ backend/results/
 *.pcap
 *.pcapng
 
+# Converter-generated files
+backend/converter/json_files/*.json
+backend/converter/yml_files/*.yml
+backend/converter/yml_files/traffic_scripts/*.sh
+
+# Generated/user templates
+backend/templates/*.json
+
 # OS/editor
 .DS_Store
 .vscode/
