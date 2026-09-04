@@ -3,46 +3,128 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const router = express.Router();
+import {
+  standardReadLimiter,
+} from "../security/rateLimiters.js";
+
+import {
+  isValidSimpleName,
+  resolveSafeFilePath,
+} from "../security/pathSecurity.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// routes/ -> ../animation
-const ANIM_DIR = path.join(__dirname, "..", "animation");
+const DEFAULT_ANIM_DIR = path.join(
+  __dirname,
+  "..",
+  "animation"
+);
 
-router.get("/", async (req, res) => {
-  try {
-    const files = await fs.readdir(ANIM_DIR);
+export function createAnimationRouter(
+  animationDir = DEFAULT_ANIM_DIR,
+  listLimiter = standardReadLimiter,
+  readLimiter = standardReadLimiter
+) {
+  const router = express.Router();
+  const resolvedAnimationDir =
+    path.resolve(animationDir);
 
-    const animations = files
-      .filter((file) => file.endsWith(".json"))
-      .map((file) => file.replace(".json", ""));
+  router.get(
+    "/",
+    listLimiter,
+    async (req, res) => {
+      try {
+        const canonicalRoot =
+          await fs.realpath(
+            resolvedAnimationDir
+          );
 
-    res.json({ animations });
-  } catch (err) {
-    console.error("Failed to list animations:", err);
-    res.status(500).json({ error: "Failed to list animations" });
-  }
-});
+        const files =
+          await fs.readdir(canonicalRoot);
 
-router.get("/:name", async (req, res) => {
-  try {
-      const name = req.params.name;
-  
-      // basic validation
-      if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-        return res.status(400).json({ error: "Invalid animation name" });
+        const animations = files
+          .filter((file) =>
+            file.endsWith(".json")
+          )
+          .map((file) =>
+            file.replace(".json", "")
+          );
+
+        return res.json({
+          animations,
+        });
+      } catch (err) {
+        console.error(
+          "Failed to list animations:",
+          err
+        );
+
+        return res.status(500).json({
+          error:
+            "Failed to list animations",
+        });
       }
-  
-      const animationPath = path.join(ANIM_DIR, `${name}.json`);
-      const data = await fs.readFile(animationPath, "utf8");
-  
-      res.json(JSON.parse(data));
-    } catch (err) {
-      console.error("Failed to load animation:", err);
-      res.status(404).json({ error: "Animation not found" });
     }
-});
+  );
 
-export default router;
+  router.get(
+    "/:name",
+    readLimiter,
+    async (req, res) => {
+      const { name } = req.params;
+
+      if (!isValidSimpleName(name)) {
+        return res.status(400).json({
+          error:
+            "Invalid animation name",
+        });
+      }
+
+      try {
+        const animationPath =
+          await resolveSafeFilePath(
+            resolvedAnimationDir,
+            `${name}.json`
+          );
+
+        const data = await fs.readFile(
+          animationPath,
+          "utf8"
+        );
+
+        return res.json(
+          JSON.parse(data)
+        );
+      } catch (err) {
+        if (err.code === "ENOENT") {
+          return res.status(404).json({
+            error:
+              "Animation not found",
+          });
+        }
+
+        if (err.code === "INVALID_PATH") {
+          return res.status(400).json({
+            error:
+              "Invalid animation name",
+          });
+        }
+
+        console.error(
+          "Failed to load animation:",
+          err
+        );
+
+        return res.status(500).json({
+          error:
+            "Failed to load animation",
+        });
+      }
+    }
+  );
+
+  return router;
+}
+
+export default createAnimationRouter();

@@ -4,31 +4,23 @@ import { spawn, execFile } from "child_process";
 import { promisify } from "util";
 import { fileURLToPath } from "url";
 
-import { runs } from "../state/runs.js";
+import {
+  getRun,
+  updateRun,
+  addRunLog,
+} from "../state/runState.js";
+
+import {
+  runSpawnedCommand,
+} from "./processRunner.js";
 
 const execFileAsync = promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const backendRoot = path.join(__dirname, "..");
 
-function updateRun(runId, patch) {
-  const run = runs.get(runId);
-  if (!run) return;
-
-  Object.assign(run, patch);
-}
-
-function addLog(runId, message) {
-  const run = runs.get(runId);
-  if (!run) return;
-
-  const line = `[${new Date().toLocaleTimeString()}] ${message}`;
-
-  run.logs.push(line);
-
-  console.log(`[${runId}] ${message}`);
-}
+const backendRoot =
+  path.join(__dirname, "..");
 
 export function createEnvironmentJobs({
   execFileFn = execFileAsync,
@@ -36,91 +28,61 @@ export function createEnvironmentJobs({
   fsModule = fs,
   rootDir = backendRoot,
 } = {}) {
-  function runSpawnedCommand(
+
+  function handleRunnerOutput(
     runId,
-    command,
-    args,
-    options = {}
+    line
   ) {
-    return new Promise((resolve, reject) => {
-      const child = spawnFn(command, args, {
-        ...options,
-        shell: false,
-      });
+    addRunLog(runId, line);
 
+    if (
+      line.includes(
+        "[+] Starting environment"
+      )
+    ) {
       updateRun(runId, {
-        process: child,
+        step: "building",
       });
+    }
 
-      child.stdout.on("data", (data) => {
-        const lines = data
-          .toString()
-          .split(/\r?\n/)
-          .filter(Boolean);
-
-        for (const line of lines) {
-          addLog(runId, line);
-
-          if (line.includes("[+] Starting environment")) {
-            updateRun(runId, {
-              step: "building",
-            });
-          }
-
-          if (line.includes("[+] Environment running")) {
-            updateRun(runId, {
-              step: "running",
-              runningStartedAt: Date.now(),
-            });
-          }
-
-          if (line.includes("[+] Collecting router files")) {
-            updateRun(runId, {
-              step: "collecting",
-            });
-          }
-
-          if (line.includes("[+] Removing environment")) {
-            updateRun(runId, {
-              step: "shutting_down",
-            });
-          }
-        }
+    if (
+      line.includes(
+        "[+] Environment running"
+      )
+    ) {
+      updateRun(runId, {
+        step: "running",
+        runningStartedAt: Date.now(),
       });
+    }
 
-      child.stderr.on("data", (data) => {
-        const lines = data
-          .toString()
-          .split(/\r?\n/)
-          .filter(Boolean);
-
-        for (const line of lines) {
-          addLog(runId, `[stderr] ${line}`);
-        }
+    if (
+      line.includes(
+        "[+] Collecting router files"
+      )
+    ) {
+      updateRun(runId, {
+        step: "collecting",
       });
+    }
 
-      child.on("error", reject);
-
-      child.on("close", (code) => {
-        updateRun(runId, {
-          process: null,
-        });
-
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(
-            new Error(`${command} exited with code ${code}`)
-          );
-        }
+    if (
+      line.includes(
+        "[+] Removing environment"
+      )
+    ) {
+      updateRun(runId, {
+        step: "shutting_down",
       });
-    });
+    }
   }
 
   async function runEnvironmentJob(runId) {
-    const run = runs.get(runId);
+    const run = getRun(runId);
 
-    if (!run) return;
+    if (!run) {
+      return;
+    }
 
     try {
       const converterDir = path.join(
@@ -152,6 +114,8 @@ export function createEnvironmentJobs({
 
       updateRun(runId, {
         composePath,
+        status: "active",
+        step: "converting",
       });
 
       fsModule.mkdirSync(
@@ -161,34 +125,33 @@ export function createEnvironmentJobs({
         }
       );
 
-      fsModule.mkdirSync(resultsDir, {
-        recursive: true,
-      });
+      fsModule.mkdirSync(
+        resultsDir,
+        {
+          recursive: true,
+        }
+      );
 
-      updateRun(runId, {
-        status: "active",
-        step: "converting",
-      });
-
-      addLog(
+      addRunLog(
         runId,
         "Converting topology JSON to docker-compose.yml"
       );
 
-      const converterResult = await execFileFn(
-        "go",
-        ["run", ".", topologyPath],
-        {
-          cwd: converterDir,
-        }
-      );
+      const converterResult =
+        await execFileFn(
+          "go",
+          ["run", ".", topologyPath],
+          {
+            cwd: converterDir,
+          }
+        );
 
       fsModule.writeFileSync(
         composePath,
         converterResult.stdout
       );
 
-      addLog(
+      addRunLog(
         runId,
         "docker-compose.yml created"
       );
@@ -197,7 +160,7 @@ export function createEnvironmentJobs({
         step: "building",
       });
 
-      addLog(
+      addRunLog(
         runId,
         "Starting Docker environment"
       );
@@ -223,14 +186,40 @@ export function createEnvironmentJobs({
         );
       }
 
-      await runSpawnedCommand(
-        runId,
-        runnerCommand,
-        runnerArgs,
-        {
+      await runSpawnedCommand({
+        command: runnerCommand,
+        args: runnerArgs,
+        spawnFn,
+        options: {
           cwd: runnerDir,
-        }
-      );
+        },
+
+        onProcess: (child) => {
+          updateRun(runId, {
+            process: child,
+          });
+        },
+
+        onStdout: (line) => {
+          handleRunnerOutput(
+            runId,
+            line
+          );
+        },
+
+        onStderr: (line) => {
+          addRunLog(
+            runId,
+            `[stderr] ${line}`
+          );
+        },
+
+        onClose: () => {
+          updateRun(runId, {
+            process: null,
+          });
+        },
+      });
 
       updateRun(runId, {
         status: "finished",
@@ -238,30 +227,35 @@ export function createEnvironmentJobs({
         finishedAt: Date.now(),
       });
 
-      addLog(runId, "Finished");
+      addRunLog(runId, "Finished");
+
     } catch (error) {
       updateRun(runId, {
         status: "failed",
         step: "failed",
         finishedAt: Date.now(),
-        error: error.message ?? String(error),
+        error:
+          error.message ??
+          String(error),
       });
 
-      addLog(
+      addRunLog(
         runId,
-        `Failed: ${error.message ?? error}`
+        `Failed: ${
+          error.message ?? error
+        }`
       );
     }
   }
 
   function stopEnvironmentJob(runId) {
-    const run = runs.get(runId);
+    const run = getRun(runId);
 
     if (!run?.process) {
       return false;
     }
 
-    addLog(
+    addRunLog(
       runId,
       "Stopping interactive environment"
     );
