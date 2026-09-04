@@ -1,8 +1,11 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+
+import {
+  standardReadLimiter,
+} from "../security/rateLimiters.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,16 +15,9 @@ const defaultOutputPath = path.join(
   "../converter/json_files/topology.json"
 );
 
-const topologyLimiter = rateLimit({
-  windowMs: 1000,
-  limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 export function createTopologyRouter(
   outputPath = defaultOutputPath,
-  limiter = topologyLimiter
+  limiter = standardReadLimiter
 ) {
   const router = express.Router();
 

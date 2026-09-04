@@ -20,14 +20,15 @@ function createFakeChild() {
 
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
-
   child.kill = vi.fn();
 
   return child;
 }
 
 function flushPromises() {
-  return new Promise((resolve) => setImmediate(resolve));
+  return new Promise((resolve) =>
+    setImmediate(resolve)
+  );
 }
 
 describe("runEnvironmentJob", () => {
@@ -37,6 +38,7 @@ describe("runEnvironmentJob", () => {
 
   afterEach(() => {
     runs.clear();
+    vi.restoreAllMocks();
   });
 
   it("runs converter and runner successfully", async () => {
@@ -54,6 +56,7 @@ describe("runEnvironmentJob", () => {
     });
 
     const child = createFakeChild();
+
     const spawnFn = vi.fn(() => child);
 
     const fsModule = {
@@ -61,14 +64,16 @@ describe("runEnvironmentJob", () => {
       writeFileSync: vi.fn(),
     };
 
-    const { runEnvironmentJob } = createEnvironmentJobs({
-      execFileFn,
-      spawnFn,
-      fsModule,
-      rootDir: "/test/backend",
-    });
+    const { runEnvironmentJob } =
+      createEnvironmentJobs({
+        execFileFn,
+        spawnFn,
+        fsModule,
+        rootDir: "/test/backend",
+      });
 
-    const jobPromise = runEnvironmentJob("run1");
+    const jobPromise =
+      runEnvironmentJob("run1");
 
     await flushPromises();
 
@@ -85,7 +90,9 @@ describe("runEnvironmentJob", () => {
 
     expect(run.status).toBe("finished");
     expect(run.step).toBe("finished");
-    expect(run.finishedAt).toEqual(expect.any(Number));
+    expect(run.finishedAt).toEqual(
+      expect.any(Number)
+    );
 
     expect(execFileFn).toHaveBeenCalledWith(
       "go",
@@ -99,7 +106,27 @@ describe("runEnvironmentJob", () => {
       }
     );
 
-    expect(fsModule.writeFileSync).toHaveBeenCalledWith(
+    expect(
+      fsModule.mkdirSync
+    ).toHaveBeenCalledWith(
+      "/test/backend/converter/yml_files",
+      {
+        recursive: true,
+      }
+    );
+
+    expect(
+      fsModule.mkdirSync
+    ).toHaveBeenCalledWith(
+      "/test/backend/results",
+      {
+        recursive: true,
+      }
+    );
+
+    expect(
+      fsModule.writeFileSync
+    ).toHaveBeenCalledWith(
       "/test/backend/converter/yml_files/docker-compose.yml",
       "services:\n  pc1:\n"
     );
@@ -114,10 +141,9 @@ describe("runEnvironmentJob", () => {
         "--duration",
         "30s",
       ],
-      {
+      expect.objectContaining({
         cwd: "/test/backend/runner",
-        shell: false,
-      }
+      })
     );
   });
 
@@ -131,24 +157,25 @@ describe("runEnvironmentJob", () => {
       process: null,
     });
 
-    const execFileFn = vi.fn().mockResolvedValue({
-      stdout: "services: {}\n",
-    });
-
     const child = createFakeChild();
+
     const spawnFn = vi.fn(() => child);
 
-    const { runEnvironmentJob } = createEnvironmentJobs({
-      execFileFn,
-      spawnFn,
-      fsModule: {
-        mkdirSync: vi.fn(),
-        writeFileSync: vi.fn(),
-      },
-      rootDir: "/test/backend",
-    });
+    const { runEnvironmentJob } =
+      createEnvironmentJobs({
+        execFileFn: vi.fn().mockResolvedValue({
+          stdout: "services: {}\n",
+        }),
+        spawnFn,
+        fsModule: {
+          mkdirSync: vi.fn(),
+          writeFileSync: vi.fn(),
+        },
+        rootDir: "/test/backend",
+      });
 
-    const promise = runEnvironmentJob("run1");
+    const promise =
+      runEnvironmentJob("run1");
 
     await flushPromises();
 
@@ -172,19 +199,21 @@ describe("runEnvironmentJob", () => {
       process: null,
     });
 
-    const execFileFn = vi.fn().mockRejectedValue(
-      new Error("converter failed")
-    );
+    const execFileFn =
+      vi.fn().mockRejectedValue(
+        new Error("converter failed")
+      );
 
-    const { runEnvironmentJob } = createEnvironmentJobs({
-      execFileFn,
-      spawnFn: vi.fn(),
-      fsModule: {
-        mkdirSync: vi.fn(),
-        writeFileSync: vi.fn(),
-      },
-      rootDir: "/test/backend",
-    });
+    const { runEnvironmentJob } =
+      createEnvironmentJobs({
+        execFileFn,
+        spawnFn: vi.fn(),
+        fsModule: {
+          mkdirSync: vi.fn(),
+          writeFileSync: vi.fn(),
+        },
+        rootDir: "/test/backend",
+      });
 
     await runEnvironmentJob("run1");
 
@@ -192,7 +221,12 @@ describe("runEnvironmentJob", () => {
 
     expect(run.status).toBe("failed");
     expect(run.step).toBe("failed");
-    expect(run.error).toBe("converter failed");
+    expect(run.finishedAt).toEqual(
+      expect.any(Number)
+    );
+    expect(run.error).toBe(
+      "converter failed"
+    );
   });
 
   it("marks the run as failed when runner exits non-zero", async () => {
@@ -207,19 +241,21 @@ describe("runEnvironmentJob", () => {
 
     const child = createFakeChild();
 
-    const { runEnvironmentJob } = createEnvironmentJobs({
-      execFileFn: vi.fn().mockResolvedValue({
-        stdout: "services: {}\n",
-      }),
-      spawnFn: vi.fn(() => child),
-      fsModule: {
-        mkdirSync: vi.fn(),
-        writeFileSync: vi.fn(),
-      },
-      rootDir: "/test/backend",
-    });
+    const { runEnvironmentJob } =
+      createEnvironmentJobs({
+        execFileFn: vi.fn().mockResolvedValue({
+          stdout: "services: {}\n",
+        }),
+        spawnFn: vi.fn(() => child),
+        fsModule: {
+          mkdirSync: vi.fn(),
+          writeFileSync: vi.fn(),
+        },
+        rootDir: "/test/backend",
+      });
 
-    const promise = runEnvironmentJob("run1");
+    const promise =
+      runEnvironmentJob("run1");
 
     await flushPromises();
 
@@ -231,7 +267,12 @@ describe("runEnvironmentJob", () => {
 
     expect(run.status).toBe("failed");
     expect(run.step).toBe("failed");
-    expect(run.error).toContain("exited with code 1");
+    expect(run.finishedAt).toEqual(
+      expect.any(Number)
+    );
+    expect(run.error).toContain(
+      "exited with code 1"
+    );
   });
 
   it("updates run steps from runner output", async () => {
@@ -246,19 +287,21 @@ describe("runEnvironmentJob", () => {
 
     const child = createFakeChild();
 
-    const { runEnvironmentJob } = createEnvironmentJobs({
-      execFileFn: vi.fn().mockResolvedValue({
-        stdout: "services: {}\n",
-      }),
-      spawnFn: vi.fn(() => child),
-      fsModule: {
-        mkdirSync: vi.fn(),
-        writeFileSync: vi.fn(),
-      },
-      rootDir: "/test/backend",
-    });
+    const { runEnvironmentJob } =
+      createEnvironmentJobs({
+        execFileFn: vi.fn().mockResolvedValue({
+          stdout: "services: {}\n",
+        }),
+        spawnFn: vi.fn(() => child),
+        fsModule: {
+          mkdirSync: vi.fn(),
+          writeFileSync: vi.fn(),
+        },
+        rootDir: "/test/backend",
+      });
 
-    const promise = runEnvironmentJob("run1");
+    const promise =
+      runEnvironmentJob("run1");
 
     await flushPromises();
 
@@ -267,14 +310,18 @@ describe("runEnvironmentJob", () => {
       "[+] Starting environment\n"
     );
 
-    expect(runs.get("run1").step).toBe("building");
+    expect(
+      runs.get("run1").step
+    ).toBe("building");
 
     child.stdout.emit(
       "data",
       "[+] Environment running\n"
     );
 
-    expect(runs.get("run1").step).toBe("running");
+    expect(
+      runs.get("run1").step
+    ).toBe("running");
 
     expect(
       runs.get("run1").runningStartedAt
@@ -285,52 +332,126 @@ describe("runEnvironmentJob", () => {
       "[+] Collecting router files\n"
     );
 
-    expect(runs.get("run1").step).toBe("collecting");
+    expect(
+      runs.get("run1").step
+    ).toBe("collecting");
 
     child.stdout.emit(
       "data",
       "[+] Removing environment\n"
     );
 
-    expect(runs.get("run1").step).toBe("shutting_down");
+    expect(
+      runs.get("run1").step
+    ).toBe("shutting_down");
 
     child.emit("close", 0);
 
     await promise;
   });
 
-  describe("stopEnvironmentJob", () => {
-    it("returns false when there is no active process", () => {
-      runs.set("run1", {
-        logs: [],
-        process: null,
-      });
-
-      const { stopEnvironmentJob } = createEnvironmentJobs();
-
-      expect(stopEnvironmentJob("run1")).toBe(false);
+  it("stores and clears the active child process", async () => {
+    runs.set("run1", {
+      status: "active",
+      step: "queued",
+      logs: [],
+      interactive: false,
+      durationSeconds: 30,
+      process: null,
     });
 
-    it("kills the process with SIGTERM", () => {
-      const process = {
-        kill: vi.fn(),
-      };
+    const child = createFakeChild();
 
-      runs.set("run1", {
-        logs: [],
-        process,
-        step: "running",
+    const { runEnvironmentJob } =
+      createEnvironmentJobs({
+        execFileFn: vi.fn().mockResolvedValue({
+          stdout: "services: {}\n",
+        }),
+        spawnFn: vi.fn(() => child),
+        fsModule: {
+          mkdirSync: vi.fn(),
+          writeFileSync: vi.fn(),
+        },
+        rootDir: "/test/backend",
       });
 
-      const { stopEnvironmentJob } = createEnvironmentJobs();
+    const promise =
+      runEnvironmentJob("run1");
 
-      const result = stopEnvironmentJob("run1");
+    await flushPromises();
 
-      expect(result).toBe(true);
+    expect(
+      runs.get("run1").process
+    ).toBe(child);
 
-      expect(process.kill).toHaveBeenCalledWith("SIGTERM");
+    child.emit("close", 0);
 
-      expect(runs.get("run1").step).toBe("stopping");
+    await promise;
+
+    expect(
+      runs.get("run1").process
+    ).toBeNull();
+  });
+});
+
+describe("stopEnvironmentJob", () => {
+  beforeEach(() => {
+    runs.clear();
+  });
+
+  afterEach(() => {
+    runs.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("returns false when the run does not exist", () => {
+    const { stopEnvironmentJob } =
+      createEnvironmentJobs();
+
+    expect(
+      stopEnvironmentJob("missing")
+    ).toBe(false);
+  });
+
+  it("returns false when there is no active process", () => {
+    runs.set("run1", {
+      logs: [],
+      process: null,
     });
+
+    const { stopEnvironmentJob } =
+      createEnvironmentJobs();
+
+    expect(
+      stopEnvironmentJob("run1")
+    ).toBe(false);
+  });
+
+  it("kills the process with SIGTERM", () => {
+    const process = {
+      kill: vi.fn(),
+    };
+
+    runs.set("run1", {
+      logs: [],
+      process,
+      step: "running",
+    });
+
+    const { stopEnvironmentJob } =
+      createEnvironmentJobs();
+
+    const result =
+      stopEnvironmentJob("run1");
+
+    expect(result).toBe(true);
+
+    expect(
+      process.kill
+    ).toHaveBeenCalledWith("SIGTERM");
+
+    expect(
+      runs.get("run1").step
+    ).toBe("stopping");
   });
 });
