@@ -55,8 +55,8 @@ func writeHeader(b *strings.Builder, topo Topology) error {
 
 	b.WriteString(`x-netem-env: &netem_env
   DELAY_MEAN: 1ms
-  DELAY_JITTER: 0.3ms
-  LOSS: 0.1%
+  DELAY_JITTER: 0ms
+  LOSS: 0%
   RATE: 50mbit
 
 services:

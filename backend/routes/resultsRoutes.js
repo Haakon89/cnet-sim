@@ -2,31 +2,21 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import rateLimit from "express-rate-limit";
+
+import {
+  standardReadLimiter,
+  standardWriteLimiter,
+} from "../security/rateLimiters.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DEFAULT_RESULTS_DIR = path.join(__dirname, "..", "results");
 
-const resultsListLimiter = rateLimit({
-  windowMs: 1000,
-  limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const resultsDownloadLimiter = rateLimit({
-  windowMs: 1000,
-  limit: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 export function createResultsRouter(
   resultsDir = DEFAULT_RESULTS_DIR,
-  listLimiter = resultsListLimiter,
-  downloadLimiter = resultsDownloadLimiter
+  listLimiter = standardReadLimiter,
+  downloadLimiter = standardWriteLimiter
 ) {
   const router = express.Router();
 

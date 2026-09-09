@@ -1,18 +1,14 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
 import { execFile } from "child_process";
 import { runs } from "../state/runs.js";
 
-const containerStatusLimiter = rateLimit({
-  windowMs: 1000,
-  limit: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+import {
+  standardWriteLimiter,
+} from "../security/rateLimiters.js";
 
 export function createInteractiveRouter(
   execFileFn = execFile,
-  limiter = containerStatusLimiter
+  limiter = standardWriteLimiter
 ) {
   const router = express.Router();
 
