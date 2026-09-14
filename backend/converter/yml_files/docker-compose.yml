@@ -1,6 +1,17 @@
-x-pc-template: &pc_template
+x-bot-template: &bot_template
   build:
-    context: ./pc
+    context: ./bot
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+
+x-botrouter-template: &botrouter_template
+  build:
+    context: ./botrouter
+  sysctls:
+    net.ipv4.ip_forward: "1"
+    net.ipv4.conf.all.rp_filter: "0"
+    net.ipv4.conf.default.rp_filter: "0"
   cap_add:
     - NET_ADMIN
     - NET_RAW
@@ -16,46 +27,53 @@ x-router-template: &router_template
     - NET_ADMIN
     - NET_RAW
 
+x-webserver-template: &webserver_template
+  build:
+    context: ./webserver
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+
 x-netem-env: &netem_env
-  DELAY_MEAN: 0ms
+  DELAY_MEAN: 0.1ms
   DELAY_JITTER: 0ms
   LOSS: 0%
   RATE: 50mbit
 
 services:
-  pc1:
-    <<: *pc_template
-    container_name: pc1
+  bot1:
+    <<: *bot_template
+    container_name: bot1
     environment:
       <<: *netem_env
-      DEVICE_NAME: pc1
+      DEVICE_NAME: bot1
       IFACE: eth0
       GW: 10.1.0.2
       STARTUP_SCRIPT: /usr/local/bin/startup.sh
       WORKLOAD_SCRIPT: /usr/local/bin/workload.sh
     volumes:
-      - ./traffic_scripts/pc1_startup.sh:/usr/local/bin/startup.sh:ro
-      - ./traffic_scripts/pc1_workload.sh:/usr/local/bin/workload.sh:ro
+      - ./traffic_scripts/bot1_startup.sh:/usr/local/bin/startup.sh:ro
+      - ./traffic_scripts/bot1_workload.sh:/usr/local/bin/workload.sh:ro
     networks:
       net1:
         ipv4_address: 10.1.0.10
 
-  pc2:
-    <<: *pc_template
-    container_name: pc2
+  botrouter2:
+    <<: *botrouter_template
+    container_name: botrouter2
     environment:
       <<: *netem_env
-      DEVICE_NAME: pc2
-      IFACE: eth0
-      GW: 10.2.0.2
-      STARTUP_SCRIPT: /usr/local/bin/startup.sh
-      WORKLOAD_SCRIPT: /usr/local/bin/workload.sh
+      DEVICE_NAME: botrouter2
+      CAPTURE_DURATION: 300
+      ROUTES: "10.3.0.0/24 via 10.2.0.3"
+      DELAY_SCRIPT: /usr/local/bin/delay.sh
     volumes:
-      - ./traffic_scripts/pc2_startup.sh:/usr/local/bin/startup.sh:ro
-      - ./traffic_scripts/pc2_workload.sh:/usr/local/bin/workload.sh:ro
+      - ./traffic_scripts/botrouter2_delay.sh:/usr/local/bin/delay.sh:ro
     networks:
+      net1:
+        ipv4_address: 10.1.0.2
       net2:
-        ipv4_address: 10.2.0.10
+        ipv4_address: 10.2.0.2
 
   router3:
     <<: *router_template
@@ -64,14 +82,32 @@ services:
       <<: *netem_env
       DEVICE_NAME: router3
       CAPTURE_DURATION: 300
+      ROUTES: "10.1.0.0/24 via 10.2.0.2"
       DELAY_SCRIPT: /usr/local/bin/delay.sh
     volumes:
       - ./traffic_scripts/router3_delay.sh:/usr/local/bin/delay.sh:ro
     networks:
-      net1:
-        ipv4_address: 10.1.0.2
       net2:
-        ipv4_address: 10.2.0.2
+        ipv4_address: 10.2.0.3
+      net3:
+        ipv4_address: 10.3.0.2
+
+  webserver4:
+    <<: *webserver_template
+    container_name: webserver4
+    environment:
+      <<: *netem_env
+      DEVICE_NAME: webserver4
+      IFACE: eth0
+      GW: 10.3.0.2
+      STARTUP_SCRIPT: /usr/local/bin/startup.sh
+      WORKLOAD_SCRIPT: /usr/local/bin/workload.sh
+    volumes:
+      - ./traffic_scripts/webserver4_startup.sh:/usr/local/bin/startup.sh:ro
+      - ./traffic_scripts/webserver4_workload.sh:/usr/local/bin/workload.sh:ro
+    networks:
+      net3:
+        ipv4_address: 10.3.0.10
 
 networks:
   net1:
@@ -84,3 +120,8 @@ networks:
     ipam:
       config:
         - subnet: 10.2.0.0/24
+  net3:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.3.0.0/24
